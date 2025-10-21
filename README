@@ -1,0 +1,16 @@
+# 🤖 AI Commit Summarizer
+
+Automatically generate concise Pull Request summaries using OpenAI GPT models.
+
+## 🔧 Setup
+1. Fork this repo.
+2. Add `OPENAI_API_KEY` to your repository Secrets.
+3. Commit and push a new PR — the action will auto-comment a summary.
+
+## 🧠 Example
+> **Summary:**  
+> - Refactors user authentication to use async JWT verification  
+> - Adds error handling for expired tokens  
+> - Improves test coverage by 10%
+
+Simple, clear, automatic.

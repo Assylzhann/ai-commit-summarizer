@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+"""
+AI Commit Summarizer + Editor
+Automatically generates or rewrites meaningful commit messages
+based on Git diffs or existing commit history.
+"""
+
+import os
+import subprocess
+import sys
+import openai
+
+# ===============================
+# Configuration
+# ===============================
+MODEL = "gpt-4o-mini"
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# ===============================
+# Utility functions
+# ===============================
+def run_cmd(cmd):
+    return subprocess.check_output(cmd, text=True).strip()
+
+def get_staged_diff():
+    try:
+        diff = run_cmd(["git", "diff", "--cached"])
+        if not diff:
+            print("❌ No staged changes to commit.")
+            sys.exit(1)
+        return diff
+    except subprocess.CalledProcessError:
+        print("Error reading git diff.")
+        sys.exit(1)
+
+# ===============================
+# Generate commit message
+# ===============================
+def generate_commit_message(diff: str) -> str:
+    prompt = f"""
+You are an assistant that writes clean, informative Git commit messages.
+
+Summarize the following Git diff as a concise commit message (max 1–2 lines):
+Keep it professional and specific.
+
+Diff:
+{diff[:15000]}
+"""
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=120,
+    )
+    return response.choices[0].message["content"].strip()
+
+# ===============================
+# ✨ NEW FEATURE: Auto-edit commit messages
+# ===============================
+def auto_edit_commit_messages(num_commits=5):
+    """
+    Fetches the last N commit messages, sends them to AI,
+    and suggests clearer, standardized rewrites.
+    """
+    print(f"🧠 Fetching the last {num_commits} commit messages...")
+    commits = run_cmd(["git", "log", f"-{num_commits}", "--pretty=format:%h %s"]).split("\n")
+
+    prompt = (
+        "Rewrite these Git commit messages to be cleaner, more consistent, "
+        "and written in present tense (imperative mood). "
+        "Preserve technical accuracy and short length.\n\n"
+        "Original commits:\n"
+        + "\n".join(commits)
+    )
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=500,
+    )
+
+    new_messages = response.choices[0].message["content"].strip()
+    print("\n✅ Suggested rewritten commits:\n")
+    print(new_messages)
+    print("\nTo apply these, you can use:")
+    print("  git rebase -i HEAD~N  # then edit messages manually using suggestions\n")
+
+# ===============================
+# CLI entry point
+# ===============================
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--edit":
+        num = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+        auto_edit_commit_messages(num)
+        return
+
+    diff = get_staged_diff()
+    print("🧠 Generating commit message with AI...")
+
+    commit_msg = generate_commit_message(diff)
+    print("\n✅ Suggested commit message:\n")
+    print(f"  {commit_msg}\n")
+
+    confirm = input("Use this message? [Y/n]: ").strip().lower()
+    if confirm in ("", "y", "yes"):
+        subprocess.run(["git", "commit", "-m", commit_msg])
+        print("✅ Commit created!")
+    else:
+        print("❌ Cancelled.")
+
+if __name__ == "__main__":
+    main()

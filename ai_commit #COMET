@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""
+AI Commit Summarizer
+Automatically generates meaningful commit messages
+based on the Git diff using OpenAI or Comet API.
+"""
+
+import os
+import subprocess
+import sys
+import openai
+
+# ===============================
+# Settings
+# ===============================
+MODEL = "gpt-4o-mini"
+openai.api_key = os.getenv("OPENAI_API_KEY")  # or your Comet API key if using Comet SDK
+
+# ===============================
+# Get staged diff
+# ===============================
+def get_staged_diff():
+    try:
+        diff = subprocess.check_output(["git", "diff", "--cached"], text=True)
+        if not diff.strip():
+            print("❌ No staged changes to commit.")
+            sys.exit(1)
+        return diff
+    except subprocess.CalledProcessError:
+        print("Error reading git diff.")
+        sys.exit(1)
+
+# ===============================
+# Generate commit message with AI
+# ===============================
+def generate_commit_message(diff: str) -> str:
+    prompt = f"""
+You are an assistant that writes clean, informative Git commit messages.
+
+Summarize the following Git diff as a concise commit message (max 1–2 lines):
+Keep it professional and specific.
+
+Diff:
+{diff[:15000]}
+"""
+
+    response = openai.ChatCompletion.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=120,
+    )
+    return response.choices[0].message["content"].strip()
+
+# ===============================
+# Main function
+# ===============================
+def main():
+    diff = get_staged_diff()
+    print("🧠 Generating commit message with AI...")
+
+    commit_msg = generate_commit_message(diff)
+    print("\n✅ Suggested commit message:\n")
+    print(f"  {commit_msg}\n")
+
+    confirm = input("Use this message? [Y/n]: ").strip().lower()
+    if confirm in ("", "y", "yes"):
+        subprocess.run(["git", "commit", "-m", commit_msg])
+        print("✅ Commit created!")
+    else:
+        print("❌ Cancelled.")
+
+if __name__ == "__main__":
+    main()
